@@ -21,8 +21,7 @@ Starts a new timer.
 - `time` (Required): The duration of the timer. Examples: `30s`, `10m`, `1h 30m`.
 - `id` (Required): A unique name to identify the timer.
 - `sound` (Optional): A sound from the server's soundboard to play when the timer ends. (Uses autocomplete)
-- `join_chanel` (Optional): Whether the bot should join your voice channel to play the sound. Defaults to `true`.
-
+  
 ### `/edit-timer`
 
 Edits the duration of an existing timer.

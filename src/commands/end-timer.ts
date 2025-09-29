@@ -5,6 +5,7 @@ import {
   getAllTimers,
   Timer,
 } from '../services/timer.service.js';
+import { checkAndDisconnect } from '../index.js';
 
 export const command = {
   data: new SlashCommandBuilder()
@@ -45,5 +46,8 @@ export const command = {
     await deleteTimer(interaction.guildId!, id);
 
     await interaction.reply(`Timer **${id}** has been stopped and deleted.`);
+
+    // Check if the bot should disconnect from voice channel
+    await checkAndDisconnect(interaction.guildId!);
   },
 };

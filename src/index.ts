@@ -5,12 +5,31 @@ import {
   NoSubscriberBehavior,
   VoiceConnectionStatus,
   entersState,
+  VoiceConnection,
 } from '@discordjs/voice';
 import { discord, redis } from './client.js';
 import { env } from './config.js';
 import { registerCommands, commands } from './commands/index.js';
 import { getAllTimers, deleteTimer } from './services/timer.service.js';
 import { Interaction } from 'discord.js';
+import { Readable } from 'stream';
+
+// Map to store voice connections per guild
+export const voiceConnections = new Map<string, VoiceConnection>();
+
+export async function checkAndDisconnect(guildId: string) {
+  const timers = await getAllTimers(guildId);
+  const activeVoiceTimers = timers.filter((timer) => timer.joinChannel);
+
+  if (activeVoiceTimers.length === 0) {
+    const connection = voiceConnections.get(guildId);
+    if (connection) {
+      connection.destroy();
+      voiceConnections.delete(guildId);
+      console.log(`Disconnected from voice channel in guild ${guildId}`);
+    }
+  }
+}
 
 discord.on('ready', async (client) => {
   console.log(`Logged in as ${client.user.tag}!`);
@@ -58,70 +77,51 @@ async function checkTimers() {
 
     for (const timer of timers) {
       if (Date.now() >= timer.endTime) {
-        // Delete timer immediately to prevent duplicate processing
         await deleteTimer(timer.guildId, timer.id);
 
         try {
           const channel = await guild.channels.fetch(timer.channelId);
           if (!channel || !channel.isTextBased()) continue;
 
-          // Edit original message to be static
+          const finishedMessage = `<@${timer.userId}> Timer **${timer.id}** has finished!`;
+
           try {
             const originalMessage = await channel.messages.fetch(timer.messageId);
-            await originalMessage.edit(`Timer **${timer.id}** has finished!`);
+            await originalMessage.edit(finishedMessage);
           } catch (editError) {
             console.error(`Failed to edit original message for timer ${timer.id}:`, editError);
-            // If editing fails, send a new message as a fallback
-            await channel.send(`Timer **${timer.id}** has finished!`);
+            await channel.send(finishedMessage);
           }
 
-          // Handle voice channel and sound
-          if (timer.sound && timer.joinChannel) {
-            const member = await guild.members.fetch(timer.userId);
-            const voiceChannel = member.voice.channel;
+          if (timer.sound) {
+            const connection = voiceConnections.get(timer.guildId);
+            if (connection) {
+              const player = createAudioPlayer();
+              connection.subscribe(player);
 
-            if (voiceChannel) {
-              try {
-                const connection = joinVoiceChannel({
-                  channelId: voiceChannel.id,
-                  guildId: voiceChannel.guild.id,
-                  adapterCreator: voiceChannel.guild.voiceAdapterCreator,
-                });
+              const sounds = await guild.soundboardSounds.fetch();
+              const soundToPlay = sounds.find(s => s.name === timer.sound);
 
-                const player = createAudioPlayer({
-                  behaviors: {
-                    noSubscriber: NoSubscriberBehavior.Pause,
-                  },
-                });
-
-                const sounds = await guild.soundboardSounds.fetch();
-                const soundToPlay = sounds.find(s => s.name === timer.sound);
-
-                if (soundToPlay) {
-                  const resource = createAudioResource(soundToPlay.url);
+              if (soundToPlay) {
+                // Fetch the audio from the URL as a stream
+                const response = await fetch(soundToPlay.url);
+                if (response.body) {
+                  const resource = createAudioResource(Readable.fromWeb(response.body as any), { inlineVolume: true });
+                  resource.volume?.setVolume(1.0);
                   player.play(resource);
-                  connection.subscribe(player);
 
-                  player.on('stateChange', (oldState, newState) => {
+                  player.on('stateChange', async (oldState, newState) => {
                     if (newState.status === 'idle') {
-                      connection.destroy();
+                      await checkAndDisconnect(timer.guildId);
                     }
                   });
-
-                  await entersState(
-                    connection,
-                    VoiceConnectionStatus.Ready,
-                    5_000, // Reduced timeout
-                  );
                 }
-              } catch (voiceError) {
-                console.error(`Error with voice connection for timer ${timer.id}:`, voiceError);
               }
             }
           }
         } catch (error) {
           console.error(`Error processing timer ${timer.id}:`, error);
-        }
+        } 
       }
     }
   }
@@ -139,3 +139,4 @@ async function start() {
 }
 
 start();
+

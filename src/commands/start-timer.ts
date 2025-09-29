@@ -1,6 +1,8 @@
 import { GuildSoundboardSound, SlashCommandBuilder } from 'discord.js';
 import { createTimer } from '../services/timer.service.js';
 import { parseTimerString } from '../services/time.service.js';
+import { voiceConnections } from '../index.js';
+import { joinVoiceChannel, VoiceConnectionStatus, entersState } from '@discordjs/voice';
 
 export const command = {
   data: new SlashCommandBuilder()
@@ -23,11 +25,6 @@ export const command = {
         .setName('sound')
         .setDescription('A sound from the soundboard to play when the timer ends.')
         .setAutocomplete(true),
-    )
-    .addBooleanOption((option) =>
-      option
-        .setName('join_channel')
-        .setDescription('Whether the bot should join your voice channel. Defaults to true.'),
     ),
   async autocomplete(interaction: any) {
     const focusedValue = interaction.options.getFocused();
@@ -44,12 +41,11 @@ export const command = {
     );
   },
   async execute(interaction: any) {
-    if (!interaction.isChatInputCommand()) return;
+    if (!interaction.isChatInputCommand() || !interaction.member) return;
 
     const time = interaction.options.getString('time', true);
     const id = interaction.options.getString('id', true);
     const sound = interaction.options.getString('sound');
-    const joinChannel = interaction.options.getBoolean('join_channel') ?? true;
 
     const durationMs = parseTimerString(time);
 
@@ -60,14 +56,37 @@ export const command = {
       });
     }
 
+    if (sound && !voiceConnections.has(interaction.guildId!)) {
+      const member = await interaction.guild.members.fetch(interaction.user.id);
+      const voiceChannel = member.voice.channel;
+
+      if (voiceChannel) {
+        const connection = joinVoiceChannel({
+          channelId: voiceChannel.id,
+          guildId: voiceChannel.guild.id,
+          adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+        });
+        connection.on(VoiceConnectionStatus.Disconnected, () => {
+          voiceConnections.delete(interaction.guildId!);
+        });
+        voiceConnections.set(interaction.guildId!, connection);
+        await entersState(connection, VoiceConnectionStatus.Ready, 5_000);
+      } else {
+        return interaction.reply({
+          content: 'You must be in a voice channel to start a timer with sound!',
+          ephemeral: true,
+        });
+      }
+    }
+
     const endTime = Date.now() + durationMs;
 
-    const message = await interaction.reply({
-      content: `Timer **${id}** started! It will end in <t:${Math.floor(
+    await interaction.reply(
+      `Timer **${id}** started! It will end in <t:${Math.floor(
         endTime / 1000,
       )}:R>.`,
-      fetchReply: true,
-    });
+    );
+    const message = await interaction.fetchReply();
 
     await createTimer({
       id,
@@ -77,7 +96,7 @@ export const command = {
       messageId: message.id,
       endTime,
       sound: sound || undefined,
-      joinChannel,
+      joinChannel: !!sound, // joinChannel is true if a sound is provided
     });
   },
 };

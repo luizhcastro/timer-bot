@@ -1,4 +1,4 @@
-import { GuildSoundboardSound, SlashCommandBuilder, MessageFlags } from 'discord.js';
+import { GuildSoundboardSound, SlashCommandBuilder, MessageFlags, ChannelType } from 'discord.js';
 import { createTimer } from '../services/timer.service.js';
 import { parseTimerString } from '../services/time.service.js';
 import { voiceConnections } from '../index.js';
@@ -89,6 +89,25 @@ export const command = {
             });
             await entersState(connection, VoiceConnectionStatus.Ready, 5_000);
             voiceConnections.set(interaction.guildId!, connection);
+
+            if (voiceChannel.type === ChannelType.GuildStageVoice) {
+              const isStageMod = permissions.has('MuteMembers') && permissions.has('MoveMembers') && permissions.has('ManageChannels');
+
+              if (isStageMod) {
+                await interaction.guild.members.me!.voice.setSuppressed(false);
+              } else if (permissions.has('RequestToSpeak')) {
+                await interaction.guild.members.me!.voice.setRequestToSpeak(true);
+                await interaction.followUp({ 
+                  content: "I've requested to speak on the stage. A moderator needs to approve this for the alarm to be heard.",
+                  ephemeral: true
+                });
+              } else {
+                await interaction.followUp({ 
+                  content: "I don't have enough permissions to speak on this stage. Please grant me 'Request to Speak' permission or make me a Stage Moderator.",
+                  ephemeral: true
+                });
+              }
+            }
           } else {
             return interaction.editReply({
               content:

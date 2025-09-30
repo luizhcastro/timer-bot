@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import {
   deleteTimer,
   getTimer,
@@ -39,7 +39,7 @@ export const command = {
     if (!timer) {
       return interaction.reply({
         content: `Timer with ID **${id}** not found.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -47,7 +47,6 @@ export const command = {
 
     await interaction.reply(`Timer **${id}** has been stopped and deleted.`);
 
-    // Check if the bot should disconnect from voice channel
     await checkAndDisconnect(interaction.guildId!);
   },
 };

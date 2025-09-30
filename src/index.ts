@@ -11,10 +11,12 @@ import { discord, redis } from './client.js';
 import { env } from './config.js';
 import { registerCommands, commands } from './commands/index.js';
 import { getAllTimers, deleteTimer } from './services/timer.service.js';
-import { Interaction } from 'discord.js';
+import { Interaction, MessageFlags } from 'discord.js';
 import { Readable } from 'stream';
+import path from 'path';
 
-// Map to store voice connections per guild
+const DEFAULT_SOUND_NAME = 'Miau timer sound';
+
 export const voiceConnections = new Map<string, VoiceConnection>();
 
 export async function checkAndDisconnect(guildId: string) {
@@ -33,10 +35,7 @@ export async function checkAndDisconnect(guildId: string) {
 
 discord.on('ready', async (client) => {
   console.log(`Logged in as ${client.user.tag}!`);
-  const guildId = discord.guilds.cache.first()?.id;
-  if (guildId) {
-    await registerCommands(client.user.id, guildId);
-  }
+  await registerCommands(client.user.id);
 });
 
 discord.on('interactionCreate', async (interaction: Interaction) => {
@@ -61,10 +60,11 @@ discord.on('interactionCreate', async (interaction: Interaction) => {
       await command.execute(interaction);
     } catch (error) {
       console.error(error);
-      await interaction.reply({
-        content: 'There was an error while executing this command!',
-        ephemeral: true,
-      });
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
+      } else {
+        await interaction.reply({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
+      }
     }
   }
 });
@@ -99,23 +99,33 @@ async function checkTimers() {
               const player = createAudioPlayer();
               connection.subscribe(player);
 
-              const sounds = await guild.soundboardSounds.fetch();
-              const soundToPlay = sounds.find(s => s.name === timer.sound);
+              let resource;
 
-              if (soundToPlay) {
-                // Fetch the audio from the URL as a stream
-                const response = await fetch(soundToPlay.url);
-                if (response.body) {
-                  const resource = createAudioResource(Readable.fromWeb(response.body as any), { inlineVolume: true });
-                  resource.volume?.setVolume(1.0);
-                  player.play(resource);
-
-                  player.on('stateChange', async (oldState, newState) => {
-                    if (newState.status === 'idle') {
-                      await checkAndDisconnect(timer.guildId);
-                    }
-                  });
+              if (timer.sound === DEFAULT_SOUND_NAME) {
+                const filePath = path.resolve(process.cwd(), 'dist/assets/default_sound.ogg');
+                resource = createAudioResource(filePath, { inlineVolume: true });
+              } else {
+                const sounds = await guild.soundboardSounds.fetch();
+                const soundToPlay = sounds.find(s => s.name === timer.sound);
+                if (soundToPlay) {
+                  const response = await fetch(soundToPlay.url);
+                  if (response.body) {
+                    resource = createAudioResource(Readable.fromWeb(response.body as any), { inlineVolume: true });
+                  }
                 }
+              }
+
+              if (resource) {
+                resource.volume?.setVolume(1.0);
+                player.play(resource);
+
+                player.on('stateChange', async (oldState, newState) => {
+                  if (newState.status === 'idle') {
+                    await checkAndDisconnect(timer.guildId);
+                  }
+                });
+              } else {
+                await checkAndDisconnect(timer.guildId);
               }
             }
           }
@@ -139,4 +149,3 @@ async function start() {
 }
 
 start();
-

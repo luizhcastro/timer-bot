@@ -1,8 +1,10 @@
-import { GuildSoundboardSound, SlashCommandBuilder } from 'discord.js';
+import { GuildSoundboardSound, SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { createTimer } from '../services/timer.service.js';
 import { parseTimerString } from '../services/time.service.js';
 import { voiceConnections } from '../index.js';
 import { joinVoiceChannel, VoiceConnectionStatus, entersState } from '@discordjs/voice';
+
+const DEFAULT_SOUND_NAME = 'Miau timer sound';
 
 export const command = {
   data: new SlashCommandBuilder()
@@ -32,7 +34,10 @@ export const command = {
     if (!guild) return;
 
     const sounds = await guild.soundboardSounds.fetch();
-    const choices = sounds.map((sound: GuildSoundboardSound) => sound.name);
+    const soundboardChoices = sounds.map((sound: GuildSoundboardSound) => sound.name);
+    
+    const choices = [DEFAULT_SOUND_NAME, ...soundboardChoices];
+
     const filtered = choices.filter((choice: string) =>
       choice.startsWith(focusedValue),
     );
@@ -47,41 +52,62 @@ export const command = {
     const id = interaction.options.getString('id', true);
     const sound = interaction.options.getString('sound');
 
+    await interaction.deferReply();
+
     const durationMs = parseTimerString(time);
 
     if (durationMs <= 0) {
-      return interaction.reply({
-        content: 'Invalid time format. Please use a valid format (e.g., 30s, 10m, 1h 30m).',
-        ephemeral: true,
+      return interaction.editReply({
+        content:
+          'Invalid time format. Please use a valid format (e.g., 30s, 10m, 1h 30m).',
       });
     }
 
-    if (sound && !voiceConnections.has(interaction.guildId!)) {
-      const member = await interaction.guild.members.fetch(interaction.user.id);
-      const voiceChannel = member.voice.channel;
+    if (sound) {
+      try {
+        if (!voiceConnections.has(interaction.guildId!)) {
+          const member = await interaction.guild.members.fetch(
+            interaction.user.id,
+          );
+          const voiceChannel = member.voice.channel;
 
-      if (voiceChannel) {
-        const connection = joinVoiceChannel({
-          channelId: voiceChannel.id,
-          guildId: voiceChannel.guild.id,
-          adapterCreator: voiceChannel.guild.voiceAdapterCreator,
-        });
-        connection.on(VoiceConnectionStatus.Disconnected, () => {
-          voiceConnections.delete(interaction.guildId!);
-        });
-        voiceConnections.set(interaction.guildId!, connection);
-        await entersState(connection, VoiceConnectionStatus.Ready, 5_000);
-      } else {
-        return interaction.reply({
-          content: 'You must be in a voice channel to start a timer with sound!',
-          ephemeral: true,
+          if (voiceChannel) {
+            const permissions = voiceChannel.permissionsFor(interaction.guild.members.me!)
+            if (!permissions.has('Connect') || !permissions.has('Speak')) {
+              return interaction.editReply({
+                content: 'I need the permissions to join and speak in your voice channel!'
+              })
+            }
+
+            const connection = joinVoiceChannel({
+              channelId: voiceChannel.id,
+              guildId: voiceChannel.guild.id,
+              adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+            });
+            connection.on(VoiceConnectionStatus.Disconnected, () => {
+              voiceConnections.delete(interaction.guildId!);
+            });
+            await entersState(connection, VoiceConnectionStatus.Ready, 5_000);
+            voiceConnections.set(interaction.guildId!, connection);
+          } else {
+            return interaction.editReply({
+              content:
+                'You must be in a voice channel to start a timer with sound!',
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to join voice channel:', error);
+        return interaction.editReply({
+          content:
+            'I could not connect to your voice channel. Please check my permissions!',
         });
       }
     }
 
     const endTime = Date.now() + durationMs;
 
-    await interaction.reply(
+    await interaction.editReply(
       `Timer **${id}** started! It will end in <t:${Math.floor(
         endTime / 1000,
       )}:R>.`,
@@ -96,7 +122,7 @@ export const command = {
       messageId: message.id,
       endTime,
       sound: sound || undefined,
-      joinChannel: !!sound, // joinChannel is true if a sound is provided
+      joinChannel: !!sound,
     });
   },
 };

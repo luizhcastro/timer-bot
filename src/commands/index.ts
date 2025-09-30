@@ -15,15 +15,15 @@ export const commands = [
 
 const rest = new REST({ version: '10' }).setToken(env.DISCORD_TOKEN);
 
-export async function registerCommands(clientId: string, guildId: string) {
+export async function registerCommands(clientId: string) {
   try {
-    console.log('Started refreshing application (/) commands.');
+    console.log('Started refreshing application (/) global commands.');
 
-    await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
+    await rest.put(Routes.applicationCommands(clientId), {
       body: commands.map((c) => c.data.toJSON()),
     });
 
-    console.log('Successfully reloaded application (/) commands.');
+    console.log('Successfully reloaded application (/) global commands.');
   } catch (error) {
     console.error(error);
   }

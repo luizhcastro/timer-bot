@@ -19,7 +19,6 @@ Starts a new timer.
 
 **Options:**
 - `time` (Required): The duration of the timer. Examples: `30s`, `10m`, `1h 30m`.
-- `id` (Required): A unique name to identify the timer.
 - `sound` (Optional): A sound from the server's soundboard to play when the timer ends. (Uses autocomplete)
   
 ### `/edit-timer`

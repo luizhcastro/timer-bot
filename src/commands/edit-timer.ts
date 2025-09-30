@@ -51,6 +51,12 @@ export const command = {
       });
     }
 
+    if (existingTimer.userId !== interaction.user.id) {
+      return interaction.editReply({
+        content: 'You can only edit timers that you have created.',
+      });
+    }
+
     const durationMs = parseTimerString(newTime);
 
     if (durationMs <= 0) {

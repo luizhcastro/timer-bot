@@ -43,6 +43,13 @@ export const command = {
       });
     }
 
+    if (timer.userId !== interaction.user.id) {
+      return interaction.reply({
+        content: 'You can only end timers that you have created.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
     await deleteTimer(interaction.guildId!, id);
 
     await interaction.reply(`Timer **${id}** has been stopped and deleted.`);

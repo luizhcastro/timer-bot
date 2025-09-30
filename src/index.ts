@@ -73,66 +73,70 @@ async function checkTimers() {
   const guilds = discord.guilds.cache;
 
   for (const guild of guilds.values()) {
-    const timers = await getAllTimers(guild.id);
+    try {
+      const timers = await getAllTimers(guild.id);
 
-    for (const timer of timers) {
-      if (Date.now() >= timer.endTime) {
-        await deleteTimer(timer.guildId, timer.id);
-
-        try {
-          const channel = await guild.channels.fetch(timer.channelId);
-          if (!channel || !channel.isTextBased()) continue;
-
-          const finishedMessage = `<@${timer.userId}> Timer **${timer.id}** has finished!`;
+      for (const timer of timers) {
+        if (Date.now() >= timer.endTime) {
+          await deleteTimer(timer.guildId, timer.id);
 
           try {
-            const originalMessage = await channel.messages.fetch(timer.messageId);
-            await originalMessage.edit(finishedMessage);
-          } catch (editError) {
-            console.error(`Failed to edit original message for timer ${timer.id}:`, editError);
-            await channel.send(finishedMessage);
-          }
+            const channel = await guild.channels.fetch(timer.channelId);
+            if (!channel || !channel.isTextBased()) continue;
 
-          if (timer.sound) {
-            const connection = voiceConnections.get(timer.guildId);
-            if (connection) {
-              const player = createAudioPlayer();
-              connection.subscribe(player);
+            const finishedMessage = `<@${timer.userId}> Timer **${timer.id}** has finished!`;
 
-              let resource;
+            try {
+              const originalMessage = await channel.messages.fetch(timer.messageId);
+              await originalMessage.edit(finishedMessage);
+            } catch (editError) {
+              console.error(`Failed to edit original message for timer ${timer.id}:`, editError);
+              await channel.send(finishedMessage);
+            }
 
-              if (timer.sound === DEFAULT_SOUND_NAME) {
-                const filePath = path.resolve(process.cwd(), 'dist/assets/default_sound.ogg');
-                resource = createAudioResource(filePath, { inlineVolume: true });
-              } else {
-                const sounds = await guild.soundboardSounds.fetch();
-                const soundToPlay = sounds.find(s => s.name === timer.sound);
-                if (soundToPlay) {
-                  const response = await fetch(soundToPlay.url);
-                  if (response.body) {
-                    resource = createAudioResource(Readable.fromWeb(response.body as any), { inlineVolume: true });
+            if (timer.sound) {
+              const connection = voiceConnections.get(timer.guildId);
+              if (connection) {
+                const player = createAudioPlayer();
+                connection.subscribe(player);
+
+                let resource;
+
+                if (timer.sound === DEFAULT_SOUND_NAME) {
+                  const filePath = path.resolve(process.cwd(), 'dist/assets/default_sound.ogg');
+                  resource = createAudioResource(filePath, { inlineVolume: true });
+                } else {
+                  const sounds = await guild.soundboardSounds.fetch();
+                  const soundToPlay = sounds.find(s => s.name === timer.sound);
+                  if (soundToPlay) {
+                    const response = await fetch(soundToPlay.url);
+                    if (response.body) {
+                      resource = createAudioResource(Readable.fromWeb(response.body as any), { inlineVolume: true });
+                    }
                   }
                 }
-              }
 
-              if (resource) {
-                resource.volume?.setVolume(1.0);
-                player.play(resource);
+                if (resource) {
+                  resource.volume?.setVolume(1.0);
+                  player.play(resource);
 
-                player.on('stateChange', async (oldState, newState) => {
-                  if (newState.status === 'idle') {
-                    await checkAndDisconnect(timer.guildId);
-                  }
-                });
-              } else {
-                await checkAndDisconnect(timer.guildId);
+                  player.on('stateChange', async (oldState, newState) => {
+                    if (newState.status === 'idle') {
+                      await checkAndDisconnect(timer.guildId);
+                    }
+                  });
+                } else {
+                  await checkAndDisconnect(timer.guildId);
+                }
               }
             }
-          }
-        } catch (error) {
-          console.error(`Error processing timer ${timer.id}:`, error);
-        } 
+          } catch (error) {
+            console.error(`Error processing timer ${timer.id}:`, error);
+          } 
+        }
       }
+    } catch (error) {
+      console.error(`Failed to check timers for guild ${guild.id}:`, error);
     }
   }
 }

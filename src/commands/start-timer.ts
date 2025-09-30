@@ -1,5 +1,5 @@
 import { GuildSoundboardSound, SlashCommandBuilder, MessageFlags, ChannelType } from 'discord.js';
-import { createTimer } from '../services/timer.service.js';
+import { createTimer, getAllTimers } from '../services/timer.service.js';
 import { parseTimerString } from '../services/time.service.js';
 import { voiceConnections } from '../index.js';
 import { joinVoiceChannel, VoiceConnectionStatus, entersState } from '@discordjs/voice';
@@ -14,12 +14,6 @@ export const command = {
       option
         .setName('time')
         .setDescription('The duration of the timer. Examples: 30s, 10m, 1h 30m')
-        .setRequired(true),
-    )
-    .addStringOption((option) =>
-      option
-        .setName('id')
-        .setDescription('A unique name to identify the timer.')
         .setRequired(true),
     )
     .addStringOption((option) =>
@@ -49,8 +43,11 @@ export const command = {
     if (!interaction.isChatInputCommand() || !interaction.member) return;
 
     const time = interaction.options.getString('time', true);
-    const id = interaction.options.getString('id', true);
     const sound = interaction.options.getString('sound');
+
+    const timers = await getAllTimers(interaction.guildId!);
+    const username = interaction.user.username;
+    const id = `${username}-${timers.length + 1}`;
 
     await interaction.deferReply();
 

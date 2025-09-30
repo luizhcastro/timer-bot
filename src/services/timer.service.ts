@@ -41,5 +41,7 @@ export async function getAllTimers(guildId: string): Promise<Timer[]> {
 
 export async function deleteTimer(guildId: string, timerId: string): Promise<void> {
   const key = getTimerKey(guildId, timerId);
-  await redis.del(key);
+  console.log(`Deleting timer with key: ${key}`);
+  const result = await redis.del(key);
+  console.log(`Deletion result for key ${key}: ${result}`);
 }

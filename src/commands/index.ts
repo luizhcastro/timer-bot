@@ -5,12 +5,16 @@ import { command as startTimerCommand } from './start-timer.js';
 import { command as listTimersCommand } from './list-timers.js';
 import { command as endTimerCommand } from './end-timer.js';
 import { command as editTimerCommand } from './edit-timer.js';
+import { command as pingCommand } from './ping.js';
+import { command as helpCommand } from './help.js';
 
 export const commands = [
   startTimerCommand,
   listTimersCommand,
   endTimerCommand,
   editTimerCommand,
+  pingCommand,
+  helpCommand,
 ];
 
 const rest = new REST({ version: '10' }).setToken(env.DISCORD_TOKEN);

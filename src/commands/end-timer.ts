@@ -20,8 +20,9 @@ export const command = {
     ),
   async autocomplete(interaction: any) {
     const focusedValue = interaction.options.getFocused();
-    const timers = await getAllTimers(interaction.guildId!);
-    const choices = timers.map((timer: Timer) => timer.id);
+    const allTimers = await getAllTimers(interaction.guildId!);
+    const userTimers = allTimers.filter(timer => timer.userId === interaction.user.id);
+    const choices = userTimers.map((timer: Timer) => timer.id);
     const filtered = choices.filter((choice: string) =>
       choice.startsWith(focusedValue),
     );

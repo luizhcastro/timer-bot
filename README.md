@@ -1,5 +1,7 @@
 A robust and persistent Discord bot for creating, managing, and monitoring timers within your server. Built with TypeScript, Discord.js, and Redis for data persistence.
 
+[Click here for use in your server!](https://discord.com/api/oauth2/authorize?client_id=1421574558032593006&scope=bot+applications.commands&permissions=4402378263552)
+
 ## Features
 
 - **Persistent Timers**: Timers are saved in a Redis database, so they will continue even if the bot restarts.
